@@ -1,0 +1,5 @@
+[2026-03-04_08:37:34] common.sh initialized from azureuser
+[2026-03-04_08:48:46] Matched files: 0 (dir=/home/azureuser/lab7/demo pattern=*.log older_than=0)
+[2026-03-04_08:54:44] Backup created and verified: /home/azureuser/lab7-outputs/lab7-20260304-085444.tgz
+[2026-03-04_08:58:33] Matched files: 0 (dir=/home/azureuser/lab7/demo pattern=*.log older_than=0)
+[2026-03-04_08:58:35] Backup created and verified: /home/azureuser/lab7-outputs/lab7-20260304-085835.tgz

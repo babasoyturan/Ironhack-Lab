@@ -1,0 +1,3 @@
+30 2 * * * /usr/local/bin/nightly-backup-nginx.sh
+30 2 * * * /home/azureuser/lab7/scripts/backup.sh --source /home/azureuser/lab7 --dest /home/azureuser/lab7-outputs --name lab7 --retention 7 >> /home/azureuser/lab7-outputs/backup.log 2>&1
+0 * * * * /home/azureuser/lab7/scripts/log_parse.sh --file /var/log/syslog --type syslog --out /home/azureuser/lab7-outputs >> /home/azureuser/lab7-outputs/logparse.log 2>&1
