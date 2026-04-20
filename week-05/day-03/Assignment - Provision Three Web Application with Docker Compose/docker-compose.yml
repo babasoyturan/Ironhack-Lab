@@ -1,0 +1,45 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: notes-db
+    environment:
+      POSTGRES_DB: notes_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - notes-network
+
+  backend:
+    build: ./backend
+    container_name: notes-backend-container
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:password@postgres:5432/notes_db
+      NODE_ENV: development
+    ports:
+      - "3001:3001"
+    depends_on:
+      - postgres
+    networks:
+      - notes-network
+
+  frontend:
+    build: ./frontend
+    container_name: notes-frontend-container
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    networks:
+      - notes-network
+
+volumes:
+  postgres_data:
+
+networks:
+  notes-network:
+    driver: bridge
