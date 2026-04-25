@@ -1,0 +1,125 @@
+name: Deploy Three Tier Application to Azure VM
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js for validation
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18.x
+
+      - name: Validate frontend build
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+      - name: Validate backend syntax
+        working-directory: backend
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+          node -c server.js
+
+      - name: Install SSH password helper
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+
+      - name: Package application
+        run: |
+          rm -f "$RUNNER_TEMP/notes-app.tar.gz"
+
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='frontend/node_modules' \
+            --exclude='frontend/build' \
+            --exclude='backend/node_modules' \
+            -czf "$RUNNER_TEMP/notes-app.tar.gz" .
+
+          ls -lh "$RUNNER_TEMP/notes-app.tar.gz"
+
+      - name: Upload application to VM
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USERNAME: ${{ secrets.VM_USERNAME }}
+          VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
+        run: |
+          APP_DIR="/home/${VM_USERNAME}/notes-three-tier-app"
+
+          sshpass -p "$VM_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            "${VM_USERNAME}@${VM_HOST}" \
+            "mkdir -p ${APP_DIR}"
+
+          sshpass -p "$VM_PASSWORD" scp \
+            -o StrictHostKeyChecking=no \
+            "$RUNNER_TEMP/notes-app.tar.gz" \
+            "${VM_USERNAME}@${VM_HOST}:${APP_DIR}/notes-app.tar.gz"
+
+      - name: Deploy with Docker Compose on VM
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          VM_USERNAME: ${{ secrets.VM_USERNAME }}
+          VM_PASSWORD: ${{ secrets.VM_PASSWORD }}
+        run: |
+          APP_DIR="/home/${VM_USERNAME}/notes-three-tier-app"
+
+          sshpass -p "$VM_PASSWORD" ssh \
+            -o StrictHostKeyChecking=no \
+            "${VM_USERNAME}@${VM_HOST}" << EOF
+          set -e
+
+          mkdir -p "${APP_DIR}"
+
+          if [ -d "${APP_DIR}/current" ]; then
+            cd "${APP_DIR}/current"
+            docker compose down --remove-orphans || true
+          fi
+
+          rm -rf "${APP_DIR}/new"
+          mkdir -p "${APP_DIR}/new"
+
+          tar -xzf "${APP_DIR}/notes-app.tar.gz" -C "${APP_DIR}/new"
+          rm -f "${APP_DIR}/notes-app.tar.gz"
+
+          rm -rf "${APP_DIR}/current"
+          mv "${APP_DIR}/new" "${APP_DIR}/current"
+
+          cd "${APP_DIR}/current"
+
+          echo "VM_HOST=${VM_HOST}" > .env
+
+          docker compose up -d --build
+
+          docker compose ps
+
+          echo "Waiting for backend health check..."
+          for i in \$(seq 1 30); do
+            if curl -fsS http://localhost:3001/health; then
+              echo "Backend is healthy"
+              break
+            fi
+            sleep 2
+          done
+
+          curl -fsS http://localhost:3001/health
+          curl -fsS http://localhost:3000 > /dev/null
+
+          echo "Deployment completed successfully"
+          EOF
